@@ -17,7 +17,7 @@ outprefix = "covid-artic-v4.1"
 bed_url = "https://raw.githubusercontent.com/artic-network/artic-ncov2019/master/primer_schemes/nCoV-2019/V4.1/SARS-CoV-2.primer.bed"
 bed_file = f"{outprefix}.bed"
 json_file = f"{outprefix}.json"
-#subprocess.check_output(f"wget -O {bed_file} {bed_url}", shell=True)
+subprocess.check_output(f"wget -O {bed_file} {bed_url}", shell=True)
 with open(bed_file, "rb") as f:
     bed_file_sha256 = hashlib.sha256(f.read()).hexdigest()
 

@@ -95,6 +95,30 @@ def main(args=None):
     )
     reads_ref_epilog = "IMPORTANT: --tech, --ref_fasta, --outdir are REQUIRED. Reads files are required, and depend on the --tech option. Either use: 1) '--tech ont --reads reads.fq' or 2) '--tech illumina --reads1 reads1.fq --reads2 reads2.fq'."
 
+    # -------------------- sim_detect_amplicon_scheme --------------------
+    subparser_sim_detect_amp = subparsers.add_parser(
+        "sim_detect_amplicon_scheme",
+        parents=[common_parser, amplicons_parser],
+        help="EXPERIMENTAL. Simulate how well amplicon detection will work",
+        usage=f"viridian_workflow sim_detect_amplicon_scheme [options] --ref_fasta ref.fasta --outprefix out",
+        description="EXPERIMENTAL. Simulate how well amplicon detection will work",
+    )
+    subparser_sim_detect_amp.add_argument(
+        "--outprefix",
+        help="REQUIRED. Prefix of output files",
+        required=True,
+        metavar="FILENAME",
+    )
+    subparser_sim_detect_amp.add_argument(
+        "--ref_fasta",
+        help="REQUIRED. FASTA file of reference genome",
+        required=True,
+        metavar="FILENAME",
+    )
+    subparser_sim_detect_amp.set_defaults(
+        func=viridian_workflow.tasks.sim_detect_amplicon_scheme.run
+    )
+
     # ------------------------ detect_amplicon_scheme --------------------
     subparser_detect_amp = subparsers.add_parser(
         "detect_amplicon_scheme",
@@ -185,7 +209,9 @@ def main(args=None):
     if not hasattr(args, "func"):
         parser.print_help()
         sys.exit()
-    check_reads_args(args)
+
+    if args.func != viridian_workflow.tasks.sim_detect_amplicon_scheme.run:
+        check_reads_args(args)
 
     logging.basicConfig(
         format="[%(asctime)s viridian_workflow %(levelname)s] %(message)s",

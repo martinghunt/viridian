@@ -13,6 +13,7 @@ __all__ = [
     "one_sample_pipeline",
     "primers",
     "qcovid",
+    "sim_detect_amplicon_scheme",
     "sample_reads",
     "tasks",
     "utils",

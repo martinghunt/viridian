@@ -49,7 +49,6 @@ def parse_sam_file(sam_file, amplicon_scheme_list, amplicon_coords):
     results = {}
     aln_file = pysam.AlignmentFile(sam_file, "r")
     for read in aln_file:
-        print(read.query_name)
         if read.is_secondary or read.is_supplementary:
             continue
         scheme_name, amplicon_name, start, end = read.query_name.split("___")
@@ -64,11 +63,6 @@ def parse_sam_file(sam_file, amplicon_scheme_list, amplicon_coords):
         assert result_key not in result_d["matches"]
         matches = detect_primers.match_read_to_amplicons(read, amplicon_scheme_list)
         result_d["matches"][result_key] = {"amp_matches": matches}
-        if matches is not None:
-            for scheme_name, amplicon_list in matches.items():
-                for amp in amplicon_list:
-                    print(scheme_name, amp)
-        print("_________________________________________________________")
 
 def simulate_detect_scheme(
         built_in_amp_schemes,
@@ -104,8 +98,17 @@ def simulate_detect_scheme(
         sort=False,
     )
     parse_sam_file(sam_file, amplicon_scheme_list, amplicon_coords)
+    combo_counts = {}
+
     for scheme_name, results in amplicon_coords.items():
+        combo_counts[scheme_name] = {}
         for amp_name, d in results.items():
             for (start, end), match_dict in d["matches"].items():
-                hits = sorted(list(match_dict["amp_matches"].keys()))
-                print(scheme_name, amp_name, start, end, hits)
+                hits = tuple(sorted(list(match_dict["amp_matches"].keys())))
+                logging.debug(f"{scheme_name}\t{amp_name}\t{start}\t{end}\t{hits}")
+                combo_counts[scheme_name][hits] = combo_counts[scheme_name].get(hits, 0) + 1
+
+    for scheme_name, counts in combo_counts.items():
+        for combo, count in counts.items():
+            print(scheme_name, count, combo, sep="\t")
+

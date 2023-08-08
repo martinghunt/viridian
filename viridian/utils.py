@@ -2,8 +2,8 @@ import gzip
 import json
 import logging
 import os
+import pickle
 import subprocess
-import sys
 
 import pyfastaq
 
@@ -69,6 +69,16 @@ def write_json(outfile, data):
     else:
         with open(outfile, "w") as f:
             json.dump(data, f, indent=2)
+
+
+def load_pickle(infile):
+    with open(infile, "rb") as f:
+        return pickle.load(f)
+
+
+def write_pickle(outfile, data):
+    with open(outfile, "wb") as f:
+        pickle.dump(data, f, pickle.HIGHEST_PROTOCOL)
 
 
 def load_single_seq_fasta(infile):

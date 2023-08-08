@@ -19,11 +19,6 @@ def main(args=None):
     # ----------- general options common to all tasks ------------------------
     common_parser = argparse.ArgumentParser(add_help=False)
     common_parser.add_argument(
-        "--debug",
-        help="More verbose logging, and less file cleaning",
-        action="store_true",
-    )
-    common_parser.add_argument(
         "--outdir",
         help="REQUIRED. Name of output directory (will be created). This must not exist already, unless the --force option is used to overwrite",
         required=True,
@@ -33,6 +28,13 @@ def main(args=None):
         "--force",
         action="store_true",
         help="Overwrite output directory, if it already exists. Use with caution!",
+    )
+    # --------------- debug parser -------------------------------------------
+    debug_parser = argparse.ArgumentParser(add_help=False)
+    debug_parser.add_argument(
+        "--debug",
+        help="More verbose logging, and less file cleaning",
+        action="store_true",
     )
 
     # -------------- amplicons options ---------------------------------------
@@ -109,7 +111,13 @@ def main(args=None):
     # ------------------------ run_one_sample ----------------------------
     subparser_run_one_sample = subparsers.add_parser(
         "run_one_sample",
-        parents=[common_parser, amplicons_parser, reads_parser, ref_parser],
+        parents=[
+            common_parser,
+            debug_parser,
+            amplicons_parser,
+            reads_parser,
+            ref_parser,
+        ],
         help="Run the complete pipeline on one sample",
         usage=f"viridian run_one_sample [options] --tech {'|'.join(tech_choices)} --outdir out <reads options (see help)>",
         description="Run the complete pipeline on one sample",
@@ -242,7 +250,7 @@ def main(args=None):
     # ------------------------ sim_schemes -------------------------------
     subparser_sim_schemes = subparsers.add_parser(
         "sim_schemes",
-        parents=[amplicons_parser, common_parser, ref_parser],
+        parents=[amplicons_parser, common_parser, debug_parser, ref_parser],
         help="For each scheme, simulate fragments and run scheme id code",
         usage="viridian sim_schemes [options] --outdir <out>",
         description="For each scheme, simulate fragments and run scheme id code",
@@ -255,6 +263,61 @@ def main(args=None):
         metavar="INT",
     )
     subparser_sim_schemes.set_defaults(func=viridian.tasks.sim_schemes.run)
+
+    # ------------------------ qc_plot gather_data -----------------------
+    subparser_qc_plot = subparsers.add_parser(
+        "qc_plot",
+        help="Subcommand for making QC plots",
+        usage="viridian qc_plot gather_data [options] tsv_fofn",
+        description="Subcommand for making QC plots",
+    )
+    qc_plot_subparsers = subparser_qc_plot.add_subparsers(
+        title="Available commands", help="", metavar=""
+    )
+
+    subparser_gather_data = qc_plot_subparsers.add_parser(
+        "gather_data",
+        parents=[debug_parser],
+        help="Gather data from viridian runs as input to qc_plots plot",
+        usage="viridian qc_plot gather-data [options] <index_tsv> <outfile>",
+        description="Gather data from viridian runs as input to qc_plots plot",
+    )
+    subparser_gather_data.add_argument(
+        "index_tsv",
+        help="TSV file with 2 columns (in any order). 'name': name of dataset. 'qc_names_file': file of qc.tsv.gz filenames, one file per line",
+    )
+    subparser_gather_data.add_argument(
+        "outfile",
+        help="Name of output file (in python pickle format)",
+    )
+    subparser_gather_data.add_argument(
+        "--tsv_dir",
+        help="Also write output in TSV format to specified output directory (must not already exist)",
+        metavar="FILENAME",
+    )
+    subparser_gather_data.add_argument(
+        "-c",
+        "--cpus",
+        help="Number of CPUs. Input TSV files are loaded in parallel [%(default)s]",
+        default=1,
+        type=int,
+        metavar="INT",
+    )
+    subparser_gather_data.set_defaults(func=viridian.tasks.qc_plot.gather_data)
+
+    # ------------------------ qc_plot plot ------------------------------
+    subparser_plot = qc_plot_subparsers.add_parser(
+        "plot",
+        parents=[debug_parser, common_parser],
+        help="Make plot from output of qc_plot gather_data",
+        usage="viridian qc_plot plot [options] <--outdir OUT>  <infile>",
+        description="Make plot from output of qc_plot gather_data",
+    )
+    subparser_plot.add_argument(
+        "infile",
+        help="File made by qc_plots gather_data",
+    )
+    subparser_plot.set_defaults(func=viridian.tasks.qc_plot.plot)
 
     args = parser.parse_args()
     if not hasattr(args, "func"):

@@ -50,3 +50,5 @@ IUPAC = {
 }
 
 IUPAC_REV = {"".join(sorted(v)): k for k, v in IUPAC.items()}
+
+ACGT = {"A", "C", "G", "T"}

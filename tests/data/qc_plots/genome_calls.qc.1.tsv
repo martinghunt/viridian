@@ -1,0 +1,7 @@
+Ref_pos	Ref_nt	Cons_nt	Cons_depth	Mask	a	A	c	C	g	G	t	T
+1	A	-	0	ASY;DEPTH	0	0	0	0	0	0	0	0
+2	A	N	0	ASY;DEPTH	0	0	0	0	0	0	0	0
+3	G	G	21	PASS	10	11	0	0	1	0	0	0
+4	T	T	23	PASS	0	0	0	0	1	0	11	12
+5	T	C	23	FRS	0	0	0	0	1	0	11	12
+6	T	T	23	PASS	0	0	0	0	1	0	11	12

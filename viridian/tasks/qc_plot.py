@@ -21,8 +21,8 @@ def plot(options):
         utils.syscall(f"rm -rf {options.outdir}")
     plots.plot(
         options.outdir,
-        x_start=options.range[0]-1,
-        x_end=options.range[1]-1,
+        x_start=options.range[0] - 1,
+        x_end=options.range[1] - 1,
         colours=None,
         x_window=None,
         plot_width=1000,

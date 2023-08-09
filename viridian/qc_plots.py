@@ -220,8 +220,18 @@ def y_axis(
     return lines
 
 
-
-def amp_primer_track(genome_start, genome_end, x_left, x_right, y_top, y_bottom, scheme_name, plot_primers=True, plot_amp_names=True, plot_amp_number=False):
+def amp_primer_track(
+    genome_start,
+    genome_end,
+    x_left,
+    x_right,
+    y_top,
+    y_bottom,
+    scheme_name,
+    plot_primers=True,
+    plot_amp_names=True,
+    plot_amp_number=False,
+):
     logging.info(f"Making amplicon/primer track for scheme {scheme_name}")
     schemes = amplicon_schemes.get_built_in_schemes()
     assert scheme_name in schemes
@@ -230,7 +240,7 @@ def amp_primer_track(genome_start, genome_end, x_left, x_right, y_top, y_bottom,
     lines = []
     at_top = False
     x_scale = (x_right - x_left) / (genome_end - genome_start)
-    x_trans = lambda x : x_left + (x - genome_start) * x_scale
+    x_trans = lambda x: x_left + (x - genome_start) * x_scale
     text_opts = {"h_center": True, "v_center": True, "font_size": 8}
     primer_opts = {"stroke_width": 2, "linecap": "round"}
 
@@ -245,9 +255,13 @@ def amp_primer_track(genome_start, genome_end, x_left, x_right, y_top, y_bottom,
         lines.append(svg_line(x_start, y, x_end, y, "dimgrey", stroke_width=5))
 
         if plot_amp_number:
-            lines.append(svg_text(0.5 * (x_start + x_end), y_middle, amp_number+1, **text_opts))
+            lines.append(
+                svg_text(0.5 * (x_start + x_end), y_middle, amp_number + 1, **text_opts)
+            )
         elif plot_amp_names:
-            lines.append(svg_text(0.5 * (x_start + x_end), y_middle, amp["name"], **text_opts))
+            lines.append(
+                svg_text(0.5 * (x_start + x_end), y_middle, amp["name"], **text_opts)
+            )
 
         if not plot_primers:
             continue
@@ -255,18 +269,23 @@ def amp_primer_track(genome_start, genome_end, x_left, x_right, y_top, y_bottom,
         for l_r in amp["primers"]:
             y = y_top + 4 if at_top else y_bottom - 4
             previous_start = previous_end = None
-            for start, end in sorted(amp["primers"][l_r], reverse=l_r=="right"):
+            for start, end in sorted(amp["primers"][l_r], reverse=l_r == "right"):
                 if not genome_start <= start <= end <= genome_end:
                     continue
 
-                if previous_start is not None and previous_end is not None and previous_start <= end and start <= previous_end:
+                if (
+                    previous_start is not None
+                    and previous_end is not None
+                    and previous_start <= end
+                    and start <= previous_end
+                ):
                     if at_top:
                         y += 5
                     else:
                         y -= 5
                 previous_start = start
                 previous_end = end
-                y_add = 2 if at_top else - 2
+                y_add = 2 if at_top else -2
                 s = x_trans(start) + 1
                 e = x_trans(end) - 1
                 lines.append(svg_line(s, y, e, y, "red", **primer_opts))
@@ -280,8 +299,6 @@ def amp_primer_track(genome_start, genome_end, x_left, x_right, y_top, y_bottom,
                     lines.append(svg_line(e, y, e - 3, y + y_add, "red", **primer_opts))
 
     return lines
-
-
 
 
 def qc_dict_to_best_other_depths(d, exclude_base):
@@ -510,8 +527,9 @@ class Plots:
         rect_x_scale = rect_width / (x_end - x_start)
         rect_middle = 0.5 * (plot_rect_left_x + plot_rect_right_x)
         x_ticks_abs = tick_positions_from_range(x_start, x_end, x_tick_step)
-        x_ticks_pos = [plot_rect_left_x + (x - x_start) * rect_x_scale for x in x_ticks_abs]
-
+        x_ticks_pos = [
+            plot_rect_left_x + (x - x_start) * rect_x_scale for x in x_ticks_abs
+        ]
 
         os.mkdir(outdir)
         svg_out = os.path.join(outdir, "plot.svg")
@@ -606,8 +624,32 @@ class Plots:
                 primer_top = last_rect_bottom + y_gap
                 primer_bottom = primer_top + amp_track_height
                 primer_middle = 0.5 * (primer_top + primer_bottom)
-                print(*amp_primer_track(x_start, x_end, plot_rect_left_x, plot_rect_right_x, primer_top, primer_bottom, amp_scheme, plot_primers=True, plot_amp_names=plot_amp_names, plot_amp_number=plot_amp_number), sep="\n", file=f)
-                print(svg_text(plot_rect_left_x - 7, primer_middle, "Amplicons", colour="dimgrey", h_right=True), file=f)
+                print(
+                    *amp_primer_track(
+                        x_start,
+                        x_end,
+                        plot_rect_left_x,
+                        plot_rect_right_x,
+                        primer_top,
+                        primer_bottom,
+                        amp_scheme,
+                        plot_primers=True,
+                        plot_amp_names=plot_amp_names,
+                        plot_amp_number=plot_amp_number,
+                    ),
+                    sep="\n",
+                    file=f,
+                )
+                print(
+                    svg_text(
+                        plot_rect_left_x - 7,
+                        primer_middle,
+                        "Amplicons",
+                        colour="dimgrey",
+                        h_right=True,
+                    ),
+                    file=f,
+                )
 
             print("</svg>", file=f)
 

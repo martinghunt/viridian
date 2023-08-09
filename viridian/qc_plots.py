@@ -22,7 +22,7 @@ class Basecall(Enum):
 
 
 PLOT_DEFAULT_COLOURS = {
-    "ACGT_GOOD": "green",
+    "ACGT_GOOD": "#40826D",
     "ACGT_DP": "pink",
     "ACGT_BAD": "red",
     "INDEL": "gray",
@@ -78,8 +78,9 @@ def svg_header_lines(width, height):
     ]
 
 
-def svg_line(x1, y1, x2, y2, colour, stroke_width=1, linecap="butt"):
-    return f'<line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" stroke="{colour}" stroke-width="{stroke_width}" stroke-linecap="{linecap}" />'
+def svg_line(x1, y1, x2, y2, colour, stroke_width=1, linecap="butt", dasharray=None):
+    dasharray = "" if dasharray is None else f'stroke-dasharray="{dasharray}"'
+    return f'<line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" stroke="{colour}" stroke-width="{stroke_width}" stroke-linecap="{linecap}" {dasharray} />'
 
 
 def svg_polygon(
@@ -159,7 +160,7 @@ def x_axis(
     y,
     tick_labels,
     tick_positions,
-    axis_colour="dimgray",
+    axis_colour="black",
     tick_colour="dimgray",
     text_colour="dimgray",
 ):
@@ -191,6 +192,23 @@ def x_axis(
                 ),
             ]
         )
+    return lines
+
+
+def grid_v_lines(x_positions, top, bottom, x_min, x_max):
+    lines = []
+    step = x_positions[1] - x_positions[0]
+    opt_big = {"colour": "darkgrey", "stroke_width": 0.75, "dasharray": "8 2"}
+    opt_small = {"colour": "lightgrey", "stroke_width": 0.5, "dasharray": "5 2"}
+    first_small = x_positions[0] - 0.5 * step
+    if x_min <= first_small:
+        lines.append(svg_line(first_small, top, first_small, bottom, **opt_small))
+
+    for i, x in enumerate(x_positions):
+        lines.append(svg_line(x, top, x, bottom, **opt_big))
+        small_x = x + 0.5 * step
+        if small_x <= x_max:
+            lines.append(svg_line(small_x, top, small_x, bottom, **opt_small))
     return lines
 
 
@@ -257,7 +275,12 @@ def amp_primer_track(
     at_top = False
     x_scale = (x_right - x_left) / (genome_end - genome_start)
     x_trans = lambda x: x_left + (x - genome_start) * x_scale
-    text_opts = {"h_center": True, "v_center": True, "font_size": 8}
+    text_opts = {
+        "h_center": True,
+        "v_center": True,
+        "font_size": 8,
+        "colour": "dimgrey",
+    }
     primer_opts = {"stroke_width": 2, "linecap": "round"}
 
     for amp_number, amp in enumerate(sorted(scheme.amplicons, key=itemgetter("start"))):
@@ -382,6 +405,7 @@ def genes_track(
                 x_middle,
                 y_pos,
                 d["name"],
+                colour="dimgrey",
                 font_size=font_size,
                 v_center=True,
                 h_center=True,
@@ -607,16 +631,11 @@ class Plots:
         colours = {
             Basecall[k].name: colours.get(k, v) for k, v in PLOT_DEFAULT_COLOURS.items()
         }
-        total_height = (dataset_height + y_gap) * len(self.genome_calls) + bottom_gap
-        if amp_scheme is not None:
-            total_height += y_gap + amp_track_height
-        if plot_genes:
-            total_height += y_gap + genes_track_height
-
         plot_rect_left_x = 100
         plot_rect_right_x = plot_width - 100
         rect_width = plot_rect_right_x - plot_rect_left_x
         rect_y_top = y_gap
+        grid_top = rect_y_top
         rect_y_bottom = rect_y_top + dataset_height
         rect_x_scale = rect_width / (x_end - x_start)
         rect_middle = 0.5 * (plot_rect_left_x + plot_rect_right_x)
@@ -626,141 +645,149 @@ class Plots:
         ]
 
         os.mkdir(outdir)
+        svg_lines = []
+        x_coords = [
+            plot_rect_left_x + (x - x_start) * rect_x_scale
+            for x in [x_start] + list(range(x_start, x_end + 1)) + [x_end, x_start]
+        ]
+
+        for set_name, calls in self.genome_calls.items():
+            svg_lines.append(
+                svg_text(rect_middle, rect_y_top - 8, set_name, h_center=True)
+            )
+            y_vals = calls.get_plot_y_vals(x_start=x_start, x_end=x_end)
+            max_y = max(y_vals[Basecall[PLOT_BASECALL_ORDER[-1]].value])
+
+            for base_type in reversed(PLOT_BASECALL_ORDER):
+                y_coords = [rect_y_bottom] + [
+                    rect_y_bottom - (y * dataset_height / max_y)
+                    for y in y_vals[Basecall[base_type].value]
+                ]
+                y_coords.extend([rect_y_bottom, rect_y_bottom])
+                svg_lines.append(
+                    svg_polygon(
+                        colours[base_type],
+                        colours[base_type],
+                        x_coords=x_coords,
+                        y_coords=y_coords,
+                        border_width=0,
+                    )
+                )
+
+            y_ticks_abs = tick_positions_from_range(0, max_y, y_tick_step)
+            y_ticks_pos = [
+                rect_y_bottom - (y * dataset_height / max_y) for y in y_ticks_abs
+            ]
+            svg_lines.extend(
+                y_axis(
+                    rect_y_top,
+                    rect_y_bottom,
+                    plot_rect_left_x,
+                    y_ticks_abs,
+                    y_ticks_pos,
+                )
+            )
+            rect_y_top = rect_y_bottom + y_gap
+            rect_y_bottom = rect_y_top + dataset_height
+            logging.info(f"Plotted data set '{set_name}'")
+
+        last_rect_bottom = rect_y_top - y_gap
+        grid_bottom = last_rect_bottom
+        svg_lines.append(
+            svg_text(
+                plot_rect_left_x - 30,
+                0.5 * (last_rect_bottom + y_gap),
+                "Number of samples",
+                v_center=True,
+                h_center=True,
+                colour="black",
+                vertical=True,
+            )
+        )
+
+        if amp_scheme is not None:
+            primer_top = last_rect_bottom + 0.5 * y_gap
+            primer_bottom = primer_top + amp_track_height
+            primer_middle = 0.5 * (primer_top + primer_bottom)
+            svg_lines.extend(
+                amp_primer_track(
+                    x_start,
+                    x_end,
+                    plot_rect_left_x,
+                    plot_rect_right_x,
+                    primer_top,
+                    primer_bottom,
+                    amp_scheme,
+                    plot_primers=True,
+                    plot_amp_names=plot_amp_names,
+                    plot_amp_number=plot_amp_number,
+                )
+            )
+            svg_lines.append(
+                svg_text(
+                    plot_rect_left_x - 7,
+                    primer_middle,
+                    "Amplicons",
+                    colour="black",
+                    h_right=True,
+                    v_center=True,
+                )
+            )
+            grid_bottom = primer_bottom + y_gap
+
+        if plot_genes:
+            genes_top = primer_bottom + 0.75 * y_gap
+            genes_bottom = genes_top + genes_track_height
+            svg_lines.extend(
+                genes_track(
+                    x_start,
+                    x_end,
+                    plot_rect_left_x,
+                    plot_rect_right_x,
+                    genes_top,
+                    genes_bottom,
+                )
+            )
+            svg_lines.append(
+                svg_text(
+                    plot_rect_left_x - 7,
+                    0.5 * (genes_top + genes_bottom),
+                    "Genes",
+                    colour="black",
+                    h_right=True,
+                    v_center=True,
+                )
+            )
+            grid_bottom = genes_bottom + 30
+
+        svg_lines.extend(
+            x_axis(
+                plot_rect_left_x,
+                plot_rect_right_x,
+                grid_bottom,
+                x_ticks_abs,
+                x_ticks_pos,
+            )
+        )
+        svg_lines.append(
+            svg_text(
+                rect_middle,
+                grid_bottom + 25,
+                "Position in genome",
+                h_center=True,
+                v_center=True,
+                colour="black",
+            )
+        )
+
+        v_lines = grid_v_lines(
+            x_ticks_pos, grid_top - 4, grid_bottom, plot_rect_left_x, plot_rect_right_x
+        )
         svg_out = os.path.join(outdir, "plot.svg")
         with open(svg_out, "w") as f:
-            print(*svg_header_lines(plot_width, total_height), sep="\n", file=f)
-            x_coords = [
-                plot_rect_left_x + (x - x_start) * rect_x_scale
-                for x in [x_start] + list(range(x_start, x_end + 1)) + [x_end, x_start]
-            ]
-
-            for set_name, calls in self.genome_calls.items():
-                print(
-                    svg_text(rect_middle, rect_y_top - 8, set_name, h_center=True),
-                    file=f,
-                )
-                y_vals = calls.get_plot_y_vals(x_start=x_start, x_end=x_end)
-                max_y = max(y_vals[Basecall[PLOT_BASECALL_ORDER[-1]].value])
-
-                for base_type in reversed(PLOT_BASECALL_ORDER):
-                    y_coords = [rect_y_bottom] + [
-                        rect_y_bottom - (y * dataset_height / max_y)
-                        for y in y_vals[Basecall[base_type].value]
-                    ]
-                    y_coords.extend([rect_y_bottom, rect_y_bottom])
-                    print(
-                        svg_polygon(
-                            colours[base_type],
-                            colours[base_type],
-                            x_coords=x_coords,
-                            y_coords=y_coords,
-                            border_width=0,
-                        ),
-                        file=f,
-                    )
-
-                y_ticks_abs = tick_positions_from_range(0, max_y, y_tick_step)
-                y_ticks_pos = [
-                    rect_y_bottom - (y * dataset_height / max_y) for y in y_ticks_abs
-                ]
-                print(
-                    *y_axis(
-                        rect_y_top,
-                        rect_y_bottom,
-                        plot_rect_left_x,
-                        y_ticks_abs,
-                        y_ticks_pos,
-                    ),
-                    sep="\n",
-                    file=f,
-                )
-                print(
-                    *x_axis(
-                        plot_rect_left_x,
-                        plot_rect_right_x,
-                        rect_y_bottom,
-                        x_ticks_abs,
-                        x_ticks_pos,
-                    ),
-                    sep="\n",
-                    file=f,
-                )
-                rect_y_top = rect_y_bottom + y_gap
-                rect_y_bottom = rect_y_top + dataset_height
-                logging.info(f"Plotted data set '{set_name}'")
-
-            last_rect_bottom = rect_y_top - y_gap
-            print(
-                svg_text(
-                    rect_middle,
-                    last_rect_bottom + 20,
-                    "Position in genome",
-                    h_center=True,
-                    v_center=True,
-                    colour="dimgrey",
-                ),
-                file=f,
-            )
-            print(
-                svg_text(
-                    plot_rect_left_x - 30,
-                    0.5 * (last_rect_bottom + y_gap),
-                    "Number of samples",
-                    v_center=True,
-                    h_center=True,
-                    colour="dimgrey",
-                    vertical=True,
-                ),
-                file=f,
-            )
-
-            if amp_scheme is not None:
-                primer_top = last_rect_bottom + y_gap
-                primer_bottom = primer_top + amp_track_height
-                primer_middle = 0.5 * (primer_top + primer_bottom)
-                print(
-                    *amp_primer_track(
-                        x_start,
-                        x_end,
-                        plot_rect_left_x,
-                        plot_rect_right_x,
-                        primer_top,
-                        primer_bottom,
-                        amp_scheme,
-                        plot_primers=True,
-                        plot_amp_names=plot_amp_names,
-                        plot_amp_number=plot_amp_number,
-                    ),
-                    sep="\n",
-                    file=f,
-                )
-                print(
-                    svg_text(
-                        plot_rect_left_x - 7,
-                        primer_middle,
-                        "Amplicons",
-                        colour="dimgrey",
-                        h_right=True,
-                    ),
-                    file=f,
-                )
-
-            if plot_genes:
-                genes_top = primer_bottom + y_gap
-                genes_bottom = genes_top + genes_track_height
-                print(
-                    *genes_track(
-                        x_start,
-                        x_end,
-                        plot_rect_left_x,
-                        plot_rect_right_x,
-                        genes_top,
-                        genes_bottom,
-                    ),
-                    sep="\n",
-                    file=f,
-                )
-
+            print(*svg_header_lines(plot_width, grid_bottom + 40), sep="\n", file=f)
+            print(*v_lines, sep="\n", file=f)
+            print(*svg_lines, sep="\n", file=f)
             print("</svg>", file=f)
 
         svg_export(svg_out, os.path.join(outdir, "plot.pdf"))

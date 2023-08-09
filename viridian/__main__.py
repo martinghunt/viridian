@@ -317,6 +317,28 @@ def main(args=None):
         "infile",
         help="File made by qc_plots gather_data",
     )
+    subparser_plot.add_argument(
+        "--range",
+        help="Genome range to show in plot (default is show whole genome). Using --range X Y will limit the plot to genome coords from X to Y. Coords are 1-based inclusive",
+        type=int,
+        nargs=2,
+        metavar="INT",
+    )
+    subparser_plot.add_argument(
+        "--amp_scheme",
+        help="Plot a track showing amplicons and their primers. Must be one of the built-in amplicon schemes",
+        metavar="SCHEME_NAME",
+    )
+    subparser_plot.add_argument(
+        "--add_amp_names",
+        help="Add names to amplicons track when using --amp_scheme",
+        action="store_true",
+    )
+    subparser_plot.add_argument(
+        "--add_amp_number",
+        help="Add number of amplicon to amplicons track when using --amp_scheme. Overrides --add_amp_names",
+        action="store_true",
+    )
     subparser_plot.set_defaults(func=viridian.tasks.qc_plot.plot)
 
     args = parser.parse_args()

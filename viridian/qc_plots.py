@@ -4,9 +4,10 @@ import gzip
 import logging
 import math
 import multiprocessing
+from operator import itemgetter
 import os
 
-from viridian import constants, utils
+from viridian import amplicon_schemes, constants, scheme_id, utils
 
 
 class Basecall(Enum):
@@ -46,7 +47,11 @@ PLOT_BASECALL_ORDER = [
 
 
 def svg_export(infile, outfile):
-    utils.syscall(f"inkscape {infile} -o {outfile}")
+    if outfile.endswith(".png"):
+        opts = "-b 'rgb(255, 255, 255)'"
+    else:
+        opts = ""
+    utils.syscall(f"inkscape {opts} {infile} -o {outfile}")
 
 
 def svg_header_lines(width, height):
@@ -57,8 +62,8 @@ def svg_header_lines(width, height):
     ]
 
 
-def svg_line(x1, y1, x2, y2, colour, stroke_width=1):
-    return f'<line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" stroke="{colour}" stroke-width="{stroke_width}" />'
+def svg_line(x1, y1, x2, y2, colour, stroke_width=1, linecap="butt"):
+    return f'<line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" stroke="{colour}" stroke-width="{stroke_width}" stroke-linecap="{linecap}" />'
 
 
 def svg_polygon(
@@ -213,6 +218,70 @@ def y_axis(
             ]
         )
     return lines
+
+
+
+def amp_primer_track(genome_start, genome_end, x_left, x_right, y_top, y_bottom, scheme_name, plot_primers=True, plot_amp_names=True, plot_amp_number=False):
+    logging.info(f"Making amplicon/primer track for scheme {scheme_name}")
+    schemes = amplicon_schemes.get_built_in_schemes()
+    assert scheme_name in schemes
+    scheme = scheme_id.Scheme(tsv_file=schemes[scheme_name])
+    logging.info(f"Loaded scheme info {scheme_name}")
+    lines = []
+    at_top = False
+    x_scale = (x_right - x_left) / (genome_end - genome_start)
+    x_trans = lambda x : x_left + (x - genome_start) * x_scale
+    text_opts = {"h_center": True, "v_center": True, "font_size": 8}
+    primer_opts = {"stroke_width": 2, "linecap": "round"}
+
+    for amp_number, amp in enumerate(sorted(scheme.amplicons, key=itemgetter("start"))):
+        if genome_start > amp["end"] or amp["start"] > genome_end:
+            continue
+        at_top = not at_top
+        x_start = max(x_left, x_trans(amp["start"]))
+        x_end = min(x_right, x_trans(amp["end"]))
+        y_middle = 0.5 * (y_top + y_bottom)
+        y = y_top if at_top else y_bottom
+        lines.append(svg_line(x_start, y, x_end, y, "dimgrey", stroke_width=5))
+
+        if plot_amp_number:
+            lines.append(svg_text(0.5 * (x_start + x_end), y_middle, amp_number+1, **text_opts))
+        elif plot_amp_names:
+            lines.append(svg_text(0.5 * (x_start + x_end), y_middle, amp["name"], **text_opts))
+
+        if not plot_primers:
+            continue
+
+        for l_r in amp["primers"]:
+            y = y_top + 4 if at_top else y_bottom - 4
+            previous_start = previous_end = None
+            for start, end in sorted(amp["primers"][l_r], reverse=l_r=="right"):
+                if not genome_start <= start <= end <= genome_end:
+                    continue
+
+                if previous_start is not None and previous_end is not None and previous_start <= end and start <= previous_end:
+                    if at_top:
+                        y += 5
+                    else:
+                        y -= 5
+                previous_start = start
+                previous_end = end
+                y_add = 2 if at_top else - 2
+                s = x_trans(start) + 1
+                e = x_trans(end) - 1
+                lines.append(svg_line(s, y, e, y, "red", **primer_opts))
+
+                if e - s < 3:
+                    continue
+
+                if l_r == "right":
+                    lines.append(svg_line(s, y, s + 3, y + y_add, "red", **primer_opts))
+                else:
+                    lines.append(svg_line(e, y, e - 3, y + y_add, "red", **primer_opts))
+
+    return lines
+
+
 
 
 def qc_dict_to_best_other_depths(d, exclude_base):
@@ -409,9 +478,13 @@ class Plots:
         plot_width=1000,
         dataset_height=200,
         gene_track_height=20,
+        amp_track_height=20,
         y_gap=50,
         x_tick_step=None,
         y_tick_step=None,
+        amp_scheme=None,
+        plot_amp_names=False,
+        plot_amp_number=False,
     ):
         bottom_gap = 50
         if colours is None:
@@ -422,10 +495,13 @@ class Plots:
         if x_end is None:
             x_end = self.ref_length - 1
         assert 0 <= x_start < x_end < self.ref_length
+        logging.info(f"Making plots for genome coords {x_start+1}-{x_end+1}")
         colours = {
             Basecall[k].name: colours.get(k, v) for k, v in PLOT_DEFAULT_COLOURS.items()
         }
         total_height = (dataset_height + y_gap) * len(self.genome_calls) + bottom_gap
+        if amp_scheme is not None:
+            total_height += y_gap + amp_track_height
         plot_rect_left_x = 100
         plot_rect_right_x = plot_width - 100
         rect_width = plot_rect_right_x - plot_rect_left_x
@@ -434,17 +510,16 @@ class Plots:
         rect_x_scale = rect_width / (x_end - x_start)
         rect_middle = 0.5 * (plot_rect_left_x + plot_rect_right_x)
         x_ticks_abs = tick_positions_from_range(x_start, x_end, x_tick_step)
-        x_ticks_pos = [plot_rect_left_x + x * rect_x_scale for x in x_ticks_abs]
-        print("x_ticks_abs", x_ticks_abs)
-        print("x_ticks_pos", x_ticks_pos)
+        x_ticks_pos = [plot_rect_left_x + (x - x_start) * rect_x_scale for x in x_ticks_abs]
+
 
         os.mkdir(outdir)
         svg_out = os.path.join(outdir, "plot.svg")
         with open(svg_out, "w") as f:
             print(*svg_header_lines(plot_width, total_height), sep="\n", file=f)
             x_coords = [
-                plot_rect_left_x + x * rect_x_scale
-                for x in [0] + list(range(x_start, x_end + 1)) + [x_end, 0]
+                plot_rect_left_x + (x - x_start) * rect_x_scale
+                for x in [x_start] + list(range(x_start, x_end + 1)) + [x_end, x_start]
             ]
 
             for set_name, calls in self.genome_calls.items():
@@ -500,6 +575,7 @@ class Plots:
                 )
                 rect_y_top = rect_y_bottom + y_gap
                 rect_y_bottom = rect_y_top + dataset_height
+                logging.info(f"Plotted data set '{set_name}'")
 
             last_rect_bottom = rect_y_top - y_gap
             print(
@@ -525,6 +601,13 @@ class Plots:
                 ),
                 file=f,
             )
+
+            if amp_scheme is not None:
+                primer_top = last_rect_bottom + y_gap
+                primer_bottom = primer_top + amp_track_height
+                primer_middle = 0.5 * (primer_top + primer_bottom)
+                print(*amp_primer_track(x_start, x_end, plot_rect_left_x, plot_rect_right_x, primer_top, primer_bottom, amp_scheme, plot_primers=True, plot_amp_names=plot_amp_names, plot_amp_number=plot_amp_number), sep="\n", file=f)
+                print(svg_text(plot_rect_left_x - 7, primer_middle, "Amplicons", colour="dimgrey", h_right=True), file=f)
 
             print("</svg>", file=f)
 

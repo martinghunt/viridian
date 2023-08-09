@@ -339,6 +339,11 @@ def main(args=None):
         help="Add number of amplicon to amplicons track when using --amp_scheme. Overrides --add_amp_names",
         action="store_true",
     )
+    subparser_plot.add_argument(
+        "--gene_track",
+        help="Add track showing genes (assumes SARS-CoV-2 reference genome)",
+        action="store_true",
+    )
     subparser_plot.set_defaults(func=viridian.tasks.qc_plot.plot)
 
     args = parser.parse_args()

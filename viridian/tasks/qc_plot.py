@@ -21,16 +21,17 @@ def plot(options):
         utils.syscall(f"rm -rf {options.outdir}")
     plots.plot(
         options.outdir,
-        x_start=options.range[0] - 1,
-        x_end=options.range[1] - 1,
+        x_start=None if options.range is None else options.range[0] - 1,
+        x_end=None if options.range is None else options.range[1] - 1,
         colours=None,
         x_window=None,
         plot_width=1000,
-        dataset_height=200,
-        gene_track_height=20,
+        dataset_height=120,
+        genes_track_height=20,
         y_gap=45,
         x_tick_step=None,
         amp_scheme=options.amp_scheme,
         plot_amp_names=options.add_amp_names,
         plot_amp_number=options.add_amp_number,
+        plot_genes=options.gene_track,
     )

@@ -46,6 +46,22 @@ PLOT_BASECALL_ORDER = [
 ]
 
 
+COVID_GENES = [
+    {"start": 0, "end": 264, "name": "5'UTR"},
+    {"start": 265, "end": 21554, "name": "ORF1ab"},
+    {"start": 21562, "end": 25383, "name": "S"},
+    {"start": 25392, "end": 26219, "name": "ORF3a"},
+    {"start": 26244, "end": 26471, "name": "E"},
+    {"start": 26522, "end": 27190, "name": "M"},
+    {"start": 27201, "end": 27386, "name": "ORF6"},
+    {"start": 27393, "end": 27758, "name": "ORF7a"},
+    {"start": 27893, "end": 28258, "name": "ORF8"},
+    {"start": 28273, "end": 29532, "name": "N"},
+    {"start": 29557, "end": 29673, "name": "ORF10"},
+    {"start": 29674, "end": 29902, "name": "3'UTR"},
+]
+
+
 def svg_export(infile, outfile):
     if outfile.endswith(".png"):
         opts = "-b 'rgb(255, 255, 255)'"
@@ -301,6 +317,80 @@ def amp_primer_track(
     return lines
 
 
+def genes_track(
+    genome_start,
+    genome_end,
+    x_left,
+    x_right,
+    y_top,
+    y_bottom,
+):
+    logging.info(f"Making genes track")
+    print("x_left, x_right", x_left, x_right)
+    x_scale = (x_right - x_left) / (genome_end - genome_start)
+    x_trans = lambda x: x_left + (x - genome_start) * x_scale
+    y = [y_top, y_top, y_bottom, y_bottom]
+    lines = []
+    font_size = 10
+    label_above = True
+
+    for d in COVID_GENES:
+        if genome_start > d["end"] or d["start"] > genome_end:
+            continue
+        s = x_trans(max(d["start"], genome_start))
+        e = x_trans(min(d["end"], genome_end))
+        x_middle = 0.5 * (s + e)
+        x_coords = [s, e, e, s]
+
+        lines.append(
+            svg_polygon(
+                "mintcream",
+                "dimgrey",
+                x_coords=x_coords,
+                y_coords=y,
+                border_width=1,
+            )
+        )
+
+        if 7 * len(d["name"]) > e - s:  # label too big for gene rectangle
+            if d["name"] == "ORF8" and genome_end - genome_start > 20000:
+                extra = font_size
+            else:
+                extra = 0
+
+            if label_above:
+                y_pos = y_top - font_size - extra
+                line_y1 = y_top - 0.4 * font_size - extra
+                line_y2 = y_top
+            else:
+                y_pos = y_bottom + font_size + extra
+                line_y1 = y_bottom + 0.4 * font_size + extra
+                line_y2 = y_bottom
+
+            lines.append(
+                svg_line(
+                    x_middle, line_y1, x_middle, line_y2, "dimgrey", stroke_width=1
+                )
+            )
+            label_above = not label_above
+        else:
+            y_pos = 0.5 * (y_top + y_bottom)
+            label_above = True
+
+        lines.append(
+            svg_text(
+                x_middle,
+                y_pos,
+                d["name"],
+                font_size=font_size,
+                v_center=True,
+                h_center=True,
+            )
+        )
+
+    return lines
+
+
 def qc_dict_to_best_other_depths(d, exclude_base):
     return max(
         int(d[c]) + int(d[c.lower()]) for c in constants.ACGT.difference(exclude_base)
@@ -493,8 +583,8 @@ class Plots:
         colours=None,
         x_window=None,
         plot_width=1000,
-        dataset_height=200,
-        gene_track_height=20,
+        dataset_height=100,
+        genes_track_height=10,
         amp_track_height=20,
         y_gap=50,
         x_tick_step=None,
@@ -502,6 +592,7 @@ class Plots:
         amp_scheme=None,
         plot_amp_names=False,
         plot_amp_number=False,
+        plot_genes=False,
     ):
         bottom_gap = 50
         if colours is None:
@@ -519,6 +610,9 @@ class Plots:
         total_height = (dataset_height + y_gap) * len(self.genome_calls) + bottom_gap
         if amp_scheme is not None:
             total_height += y_gap + amp_track_height
+        if plot_genes:
+            total_height += y_gap + genes_track_height
+
         plot_rect_left_x = 100
         plot_rect_right_x = plot_width - 100
         rect_width = plot_rect_right_x - plot_rect_left_x
@@ -648,6 +742,22 @@ class Plots:
                         colour="dimgrey",
                         h_right=True,
                     ),
+                    file=f,
+                )
+
+            if plot_genes:
+                genes_top = primer_bottom + y_gap
+                genes_bottom = genes_top + genes_track_height
+                print(
+                    *genes_track(
+                        x_start,
+                        x_end,
+                        plot_rect_left_x,
+                        plot_rect_right_x,
+                        genes_top,
+                        genes_bottom,
+                    ),
+                    sep="\n",
                     file=f,
                 )
 

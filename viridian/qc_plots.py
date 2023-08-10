@@ -64,7 +64,7 @@ COVID_GENES = [
 
 def svg_export(infile, outfile):
     if outfile.endswith(".png"):
-        opts = "-b 'rgb(255, 255, 255)'"
+        opts = "-b 'rgb(255, 255, 255)' -d 400"
     else:
         opts = ""
     utils.syscall(f"inkscape {opts} {infile} -o {outfile}")

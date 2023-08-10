@@ -641,6 +641,7 @@ class Plots:
         amp_scheme=None,
         plot_amp_names=False,
         plot_amp_number=False,
+        plot_primers=True,
         plot_genes=False,
     ):
         bottom_gap = 50
@@ -743,7 +744,7 @@ class Plots:
                     primer_top,
                     primer_bottom,
                     amp_scheme,
-                    plot_primers=True,
+                    plot_primers=plot_primers,
                     plot_amp_names=plot_amp_names,
                     plot_amp_number=plot_amp_number,
                 )

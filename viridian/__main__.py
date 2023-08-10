@@ -344,7 +344,7 @@ def main(args=None):
     )
     subparser_plot.add_argument(
         "--amp_scheme",
-        help="Plot a track showing amplicons and their primers. Must be one of the built-in amplicon schemes",
+        help="Plot a track showing amplicons (and primers if --add_primers). Must be one of the built-in amplicon schemes",
         metavar="SCHEME_NAME",
     )
     subparser_plot.add_argument(
@@ -355,6 +355,11 @@ def main(args=None):
     subparser_plot.add_argument(
         "--add_amp_number",
         help="Add number of amplicon to amplicons track when using --amp_scheme. Overrides --add_amp_names",
+        action="store_true",
+    )
+    subparser_plot.add_argument(
+        "--add_primers",
+        help="Add primers to amplicons track, only relevant if --amp_scheme used",
         action="store_true",
     )
     subparser_plot.add_argument(

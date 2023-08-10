@@ -25,10 +25,10 @@ PLOT_DEFAULT_COLOURS = {
     "ACGT_GOOD": "#40826D",
     "ACGT_DP": "pink",
     "ACGT_BAD": "red",
-    "INDEL": "gray",
+    "INDEL": "lemonchiffon",
     "HET_GOOD": "lightgreen",
     "HET_DP": "lightblue",
-    "HET_BAD": "blue",
+    "HET_BAD": "cornflowerblue",
     "N": "lightgray",
 }
 
@@ -198,8 +198,8 @@ def x_axis(
 def grid_v_lines(x_positions, top, bottom, x_min, x_max):
     lines = []
     step = x_positions[1] - x_positions[0]
-    opt_big = {"colour": "darkgrey", "stroke_width": 0.75, "dasharray": "8 2"}
-    opt_small = {"colour": "lightgrey", "stroke_width": 0.5, "dasharray": "5 2"}
+    opt_big = {"colour": "cornflowerblue", "stroke_width": 0.75, "dasharray": "8 2"}
+    opt_small = {"colour": "cornflowerblue", "stroke_width": 0.5, "dasharray": "5 2"}
     first_small = x_positions[0] - 0.5 * step
     if x_min <= first_small:
         lines.append(svg_line(first_small, top, first_small, bottom, **opt_small))
@@ -411,6 +411,29 @@ def genes_track(
                 h_center=True,
             )
         )
+
+    return lines
+
+
+def legend(x_left, y_middle, colours, square_size=11, y_gap=5, font_size=11):
+    total_height = (
+        len(PLOT_BASECALL_ORDER) * square_size + (len(PLOT_BASECALL_ORDER) - 1) * y_gap
+    )
+    y_top = y_middle - 0.5 * total_height
+    y = y_top
+    x_r = x_left + square_size
+    text_x = x_r + 3
+    x_coords = [x_left, x_left, x_r, x_r]
+    text_opts = {"font_size": font_size, "colour": "black", "v_center": True}
+    lines = []
+    for key in reversed(PLOT_BASECALL_ORDER):
+        lines.append(svg_text(text_x, y + 0.5 * square_size, key, **text_opts))
+        y_coords = [y, y + square_size, y + square_size, y]
+        lines.append(
+            svg_polygon(colours[key], "black", x_coords=x_coords, y_coords=y_coords)
+        )
+        y += square_size + y_gap
+    return lines
 
     return lines
 
@@ -814,6 +837,13 @@ class Plots:
             print(*svg_header_lines(plot_width, grid_bottom + 40), sep="\n", file=f)
             print(*v_lines, sep="\n", file=f)
             print(*svg_lines, sep="\n", file=f)
+            print(
+                *legend(
+                    plot_rect_right_x + 10, 0.5 * (grid_top + last_rect_bottom), colours
+                ),
+                sep="\n",
+                file=f,
+            )
             print("</svg>", file=f)
 
         svg_export(svg_out, os.path.join(outdir, "plot.pdf"))

@@ -5,12 +5,18 @@ from viridian import qc_plots, utils
 
 def gather_data(options):
     p = qc_plots.Plots()
-    p.to_pickle(options.index_tsv, options.outfile, cpus=options.cpus)
+    p.from_index_file(options.index_tsv, cpus=options.cpus)
+    p.to_pickle(options.outfile)
     if options.tsv_dir is not None:
         logging.info(
             f"--tsv_dir option used, also writing data to TSV files in {options.tsv_dir}"
         )
         p.write_plot_data_tsvs(options.tsv_dir)
+
+
+def combine_data(options):
+    p = qc_plots.Plots()
+    p.combine_pickles(options.infile, options.outfile)
 
 
 def plot(options):

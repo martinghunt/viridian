@@ -492,6 +492,12 @@ class GenomeCalls:
         for new_genome in new_genomes:
             self.add_one_genome(new_genome)
 
+    def add_other_genome_calls(self, other):
+        assert len(self) == len(other)
+        for this_list, other_list in zip(self.calls, other.calls):
+            for i in range(len(this_list)):
+                this_list[i] += other_list[i]
+
     def to_text_file(self, outfile):
         logging.info(f"Writing data to file {outfile}")
         of = gzip.open if outfile.endswith(".gz") else open
@@ -563,7 +569,7 @@ class Plots:
         assert name not in self.genome_calls
         self.genome_calls[name] = genome_calls
 
-    def add_genomes(self, index_file, cpus=1):
+    def from_index_file(self, index_file, cpus=1):
         with open(index_file) as f:
             for d in csv.DictReader(f, delimiter="\t"):
                 call_set = GenomeCalls()
@@ -577,8 +583,7 @@ class Plots:
                     f"Loaded data set {d['name']} from file {d['qc_names_file']}"
                 )
 
-    def to_pickle(self, index_file, outfile, cpus=1):
-        self.add_genomes(index_file, cpus=cpus)
+    def to_pickle(self, outfile, cpus=1):
         utils.write_pickle(outfile, self.genome_calls)
         logging.info(f"Data written to file {outfile}")
 
@@ -588,6 +593,26 @@ class Plots:
         assert len(genome_lengths) == 1
         self.ref_length = genome_lengths.pop()
         logging.info(f"Data loaded from file {infile}")
+
+    def add_other_plot(self, other):
+        for other_name, other_calls in other.genome_calls.items():
+            if other_name not in self.genome_calls:
+                logging.info(f"Adding new data set {other_name}")
+                self.add_genome_call_set(other_name, other_calls)
+            else:
+                logging.info(f"Updating existing data set {other_name}")
+                self.genome_calls[other_name].add_other_genome_calls(other_calls)
+
+    def combine_pickles(self, pickles_fofn, outfile):
+        logging.info(f"Combining all data from files in {pickles_fofn}")
+        with open(pickles_fofn) as f:
+            for filename in map(str.rstrip, f):
+                logging.info(f"Adding data from file {filename}")
+                new_plots = Plots()
+                new_plots.from_pickle(filename)
+                self.add_other_plot(new_plots)
+        logging.info(f"Finished combining data from {pickles_fofn}")
+        self.to_pickle(outfile)
 
     def write_plot_data_tsvs(self, outdir):
         os.mkdir(outdir)

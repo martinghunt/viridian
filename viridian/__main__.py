@@ -305,13 +305,31 @@ def main(args=None):
     )
     subparser_gather_data.set_defaults(func=viridian.tasks.qc_plot.gather_data)
 
+    # ------------------------ qc_plot combine_data ----------------------
+    subparser_combine_data = qc_plot_subparsers.add_parser(
+        "combine_data",
+        parents=[debug_parser],
+        help="Combine data from files made by qc_plot gather_data",
+        usage="viridian qc_plot combine_data [options] <infile> <outfile>",
+        description="Combine data from files made by qc_plot gather_data",
+    )
+    subparser_combine_data.add_argument(
+        "infile",
+        help="File of filenames made by qc_plot gather_data, one filename per line",
+    )
+    subparser_combine_data.add_argument(
+        "outfile",
+        help="Name of output file (in python pickle format)",
+    )
+    subparser_combine_data.set_defaults(func=viridian.tasks.qc_plot.combine_data)
+
     # ------------------------ qc_plot plot ------------------------------
     subparser_plot = qc_plot_subparsers.add_parser(
         "plot",
         parents=[debug_parser, common_parser],
-        help="Make plot from output of qc_plot gather_data",
+        help="Make plot from output of qc_plot gather_data/combine_data",
         usage="viridian qc_plot plot [options] <--outdir OUT>  <infile>",
-        description="Make plot from output of qc_plot gather_data",
+        description="Make plot from output of qc_plot gather_data/combine_data",
     )
     subparser_plot.add_argument(
         "infile",

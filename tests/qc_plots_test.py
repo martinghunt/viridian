@@ -109,6 +109,26 @@ def test_GenomeCalls():
     gc.from_pickle(calls_file)
     assert gc.calls == expect_calls
 
+    other_gc = qc_plots.GenomeCalls()
+    other_gc.calls = [
+        [0, 1, 0, 0, 0, 0, 0, 1],
+        [0, 2, 0, 0, 0, 0, 0, 2],
+        [0, 3, 0, 0, 0, 0, 0, 0],
+        [4, 0, 4, 0, 0, 0, 0, 0],
+        [0, 0, 0, 5, 0, 0, 0, 0],
+        [0, 0, 0, 0, 6, 1, 2, 0],
+    ]
+    gc.add_other_genome_calls(other_gc)
+    expect_calls = [
+        [0, 1, 0, 3, 0, 0, 0, 1],
+        [1, 2, 0, 0, 0, 0, 0, 4],
+        [3, 3, 0, 0, 0, 0, 0, 0],
+        [6, 0, 4, 1, 0, 0, 0, 0],
+        [3, 0, 0, 5, 0, 0, 0, 0],
+        [2, 0, 0, 0, 6, 1, 2, 1],
+    ]
+    assert gc.calls == expect_calls
+
     y_vals = gc.get_plot_y_vals()
     # not worth checking this in too much detail, as y value order etc will
     # probably change. Just check dimensions are correct
@@ -150,8 +170,22 @@ def test_Plots():
 
     plots = qc_plots.Plots()
     pickle_file = os.path.join(tmp_dir, "data.pickle")
-    plots.to_pickle(index_tsv, pickle_file)
+    plots.from_index_file(index_tsv)
+    plots.to_pickle(pickle_file)
     assert plots.genome_calls == call_sets
+
+    pickles_fofn = os.path.join(tmp_dir, "data.pickles.fofn")
+    with open(pickles_fofn, "w") as f:
+        print(pickle_file, file=f)
+        print(pickle_file, file=f)
+    plots = qc_plots.Plots()
+    pickle_file_combined = pickle_file + ".combined"
+    plots.combine_pickles(pickles_fofn, pickle_file_combined)
+    assert os.path.exists(pickle_file_combined)
+    call_sets_combined = copy.deepcopy(call_sets)
+    for k in call_sets:
+        call_sets_combined[k].add_other_genome_calls(call_sets[k])
+    assert plots.genome_calls == call_sets_combined
 
     plots = qc_plots.Plots()
     plots.from_pickle(pickle_file)

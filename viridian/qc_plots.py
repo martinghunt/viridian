@@ -756,7 +756,7 @@ class Plots:
         grid_bottom = last_rect_bottom
         svg_lines.append(
             svg_text(
-                plot_rect_left_x - 30,
+                20,
                 0.5 * (last_rect_bottom + y_gap),
                 "Number of samples",
                 v_center=True,

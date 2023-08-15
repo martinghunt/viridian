@@ -552,7 +552,7 @@ class GenomeCalls:
     def add_qc_tsvs(self, file_of_qc_filenames, cpus=1):
         logging.info(f"Getting QC files to load from {file_of_qc_filenames}")
         of = gzip.open if file_of_qc_filenames.endswith(".gz") else open
-        with of(file_of_qc_filenames) as f:
+        with of(file_of_qc_filenames, "rt") as f:
             all_files = [x.rstrip() for x in f]
         logging.info(f"{len(all_files)} QC files to load from {file_of_qc_filenames}")
         next_debug_i = 0.1 * len(all_files)

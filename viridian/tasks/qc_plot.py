@@ -41,4 +41,5 @@ def plot(options):
         plot_amp_number=options.add_amp_number,
         plot_genes=options.gene_track,
         plot_primers=options.add_primers,
+        title=options.title,
     )

@@ -367,6 +367,11 @@ def main(args=None):
         help="Add track showing genes (assumes SARS-CoV-2 reference genome)",
         action="store_true",
     )
+    subparser_plot.add_argument(
+        "--title",
+        help="Add main title at top of plot",
+        metavar="STR",
+    )
     subparser_plot.set_defaults(func=viridian.tasks.qc_plot.plot)
 
     args = parser.parse_args()

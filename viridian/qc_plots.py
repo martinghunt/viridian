@@ -667,6 +667,7 @@ class Plots:
         plot_amp_number=False,
         plot_primers=True,
         plot_genes=False,
+        title=None,
     ):
         bottom_gap = 50
         if colours is None:
@@ -681,21 +682,31 @@ class Plots:
         colours = {
             Basecall[k].name: colours.get(k, v) for k, v in PLOT_DEFAULT_COLOURS.items()
         }
+
         plot_rect_left_x = 100
         plot_rect_right_x = plot_width - 100
         rect_width = plot_rect_right_x - plot_rect_left_x
         rect_y_top = y_gap
-        grid_top = rect_y_top
-        rect_y_bottom = rect_y_top + dataset_height
         rect_x_scale = rect_width / (x_end - x_start)
         rect_middle = 0.5 * (plot_rect_left_x + plot_rect_right_x)
+
+        svg_lines = []
+        if title:
+            svg_lines.append(
+                svg_text(
+                    rect_middle, 14, title, font_size=14, h_center=True, v_center=True
+                )
+            )
+            rect_y_top += 15
+
+        grid_top = rect_y_top
+        rect_y_bottom = rect_y_top + dataset_height
         x_ticks_abs = tick_positions_from_range(x_start, x_end, x_tick_step)
         x_ticks_pos = [
             plot_rect_left_x + (x - x_start) * rect_x_scale for x in x_ticks_abs
         ]
 
         os.mkdir(outdir)
-        svg_lines = []
         x_coords = [
             plot_rect_left_x + (x - x_start) * rect_x_scale
             for x in [x_start] + list(range(x_start, x_end + 1)) + [x_end, x_start]

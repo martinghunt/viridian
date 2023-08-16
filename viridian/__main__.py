@@ -372,6 +372,18 @@ def main(args=None):
         help="Add main title at top of plot",
         metavar="STR",
     )
+    subparser_plot.add_argument(
+        "--plot_diff",
+        help="Plot dataset1 - dataset2",
+        nargs=2,
+        metavar="DATASET",
+    )
+    subparser_plot.add_argument(
+        "--dataset",
+        help="Restrict to plotting the given dataset (can be used more than once)",
+        action="append",
+        metavar="DATASET",
+    )
     subparser_plot.set_defaults(func=viridian.tasks.qc_plot.plot)
 
     args = parser.parse_args()

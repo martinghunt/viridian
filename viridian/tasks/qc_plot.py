@@ -42,4 +42,6 @@ def plot(options):
         plot_genes=options.gene_track,
         plot_primers=options.add_primers,
         title=options.title,
+        diff_track=options.plot_diff,
+        datasets_to_plot=options.dataset,
     )

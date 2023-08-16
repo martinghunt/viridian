@@ -349,7 +349,6 @@ def genes_track(
     y_bottom,
 ):
     logging.info(f"Making genes track")
-    print("x_left, x_right", x_left, x_right)
     x_scale = (x_right - x_left) / (genome_end - genome_start)
     x_trans = lambda x: x_left + (x - genome_start) * x_scale
     y = [y_top, y_top, y_bottom, y_bottom]
@@ -413,6 +412,86 @@ def genes_track(
         )
 
     return lines
+
+
+def make_diff_track(
+    calls1,
+    calls2,
+    genome_start,
+    genome_end,
+    x_left,
+    x_right,
+    y_top,
+    y_bottom,
+    basecalls,
+    plot_colour="black",
+    back_colour="lightgrey",
+    flip_back=False,
+):
+    neg_colour = plot_colour
+    pos_colour = plot_colour
+
+    logging.info(f"Making diff track {','.join([x.name for x in basecalls])}")
+    x_scale = (x_right - x_left) / (genome_end - genome_start)
+    x_trans = lambda x: x_left + (x - genome_start) * x_scale
+    lines_out = []
+
+    x_vals = list(range(genome_start, genome_end + 1)) + [genome_end, genome_start]
+    x_coords = [x_trans(x) for x in x_vals]
+    y_vals = []
+    for i in range(genome_start, genome_end + 1):
+        val1 = sum(calls1[i][x.value] for x in basecalls)
+        val2 = sum(calls2[i][x.value] for x in basecalls)
+        y_vals.append(val1 - val2)
+    max_y = max(y_vals)
+    min_y = min(y_vals)
+
+    if max_y == min_y:
+        y_scale = 0
+        y_trans = lambda y: 0.5 * (y_bottom + y_top)
+    else:
+        y_scale = (y_bottom - y_top) / (max_y - min_y)
+        y_trans = lambda y: y_bottom - (y - min_y) * y_scale
+    y_vals += [0, 0]
+    y_coords_neg = [y_trans(min(0, y)) for y in y_vals]
+    y_coords_pos = [y_trans(max(0, y)) for y in y_vals]
+    w = x_coords[1] - x_coords[0]
+    x_blocks = []
+    current_interval = None
+    y_interval_coords = [y_bottom, y_top, y_top, y_bottom]
+    y_test = lambda y: (y <= 0 and flip_back) or (y >= 0 and not flip_back)
+    for x, y in zip(x_coords[:-2], y_vals[:-2]):
+        if y_test(y):
+            if current_interval is None:
+                current_interval = [x, x]
+            else:
+                current_interval[-1] = x
+        else:
+            if current_interval is not None:
+                x_plot = [current_interval[i] for i in [0, 0, 1, 1]]
+                lines_out.append(
+                    svg_polygon(
+                        back_colour,
+                        back_colour,
+                        x_coords=x_plot,
+                        y_coords=y_interval_coords,
+                    )
+                )
+                current_interval = None
+    if current_interval is not None:
+        x_plot = [current_interval[i] for i in [0, 0, 1, 1]]
+        lines_out.append(
+            svg_polygon(
+                back_colour, back_colour, x_coords=x_plot, y_coords=y_interval_coords
+            )
+        )
+    lines_out.append(
+        svg_polygon(neg_colour, neg_colour, x_coords=x_coords, y_coords=y_coords_neg)
+    )
+    lines_out.append(
+        svg_polygon(pos_colour, pos_colour, x_coords=x_coords, y_coords=y_coords_pos)
+    )
+    return lines_out
 
 
 def legend(x_left, y_middle, colours, square_size=11, y_gap=5, font_size=11):
@@ -668,6 +747,9 @@ class Plots:
         plot_primers=True,
         plot_genes=False,
         title=None,
+        diff_track=None,
+        diff_track_height=20,
+        datasets_to_plot=None,
     ):
         bottom_gap = 50
         if colours is None:
@@ -683,7 +765,7 @@ class Plots:
             Basecall[k].name: colours.get(k, v) for k, v in PLOT_DEFAULT_COLOURS.items()
         }
 
-        plot_rect_left_x = 100
+        plot_rect_left_x = 120
         plot_rect_right_x = plot_width - 100
         rect_width = plot_rect_right_x - plot_rect_left_x
         rect_y_top = y_gap
@@ -713,6 +795,8 @@ class Plots:
         ]
 
         for set_name, calls in self.genome_calls.items():
+            if datasets_to_plot is not None and set_name not in datasets_to_plot:
+                continue
             svg_lines.append(
                 svg_text(rect_middle, rect_y_top - 8, set_name, h_center=True)
             )
@@ -753,6 +837,7 @@ class Plots:
             logging.info(f"Plotted data set '{set_name}'")
 
         last_rect_bottom = rect_y_top - y_gap
+
         grid_bottom = last_rect_bottom
         svg_lines.append(
             svg_text(
@@ -766,9 +851,61 @@ class Plots:
             )
         )
 
+        current_bottom = last_rect_bottom
+
+        if diff_track is not None:
+            diff_track_top = current_bottom + y_gap
+            first_diff_top = diff_track_top
+            diff_track_bottom = diff_track_top + diff_track_height
+            basecalls = [
+                (Basecall.ACGT_BAD, True, PLOT_DEFAULT_COLOURS["ACGT_BAD"]),
+                (Basecall.ACGT_DP, True, PLOT_DEFAULT_COLOURS["ACGT_DP"]),
+                (Basecall.N, True, PLOT_DEFAULT_COLOURS["N"]),
+                (Basecall.ACGT_GOOD, False, PLOT_DEFAULT_COLOURS["ACGT_GOOD"]),
+            ]
+
+            for i, (bc, col_flip, plot_col) in enumerate(basecalls):
+                svg_lines.extend(
+                    make_diff_track(
+                        self.genome_calls[diff_track[0]].calls,
+                        self.genome_calls[diff_track[1]].calls,
+                        x_start,
+                        x_end,
+                        plot_rect_left_x,
+                        plot_rect_right_x,
+                        diff_track_top,
+                        diff_track_bottom,
+                        [bc],
+                        plot_colour="black",
+                        back_colour=PLOT_DEFAULT_COLOURS[bc.name],
+                        flip_back=col_flip,
+                    )
+                )
+
+                if i < len(basecalls) - 1:
+                    diff_track_top = diff_track_bottom + 15
+                    diff_track_bottom = diff_track_top + diff_track_height
+
+            diff_y_middle = 0.5 * (first_diff_top + diff_track_bottom)
+            svg_lines.append(
+                svg_text(5, diff_y_middle - 8, "Differences", v_center=True)
+            )
+            svg_lines.append(
+                svg_text(
+                    5,
+                    diff_y_middle + 8,
+                    f"({diff_track[0]} - {diff_track[1]})",
+                    font_size=10,
+                    v_center=True,
+                )
+            )
+
+            current_bottom = diff_track_bottom
+
         if amp_scheme is not None:
-            primer_top = last_rect_bottom + 0.5 * y_gap
+            primer_top = current_bottom + 0.5 * y_gap
             primer_bottom = primer_top + amp_track_height
+            current_bottom = primer_bottom
             primer_middle = 0.5 * (primer_top + primer_bottom)
             svg_lines.extend(
                 amp_primer_track(
@@ -797,7 +934,7 @@ class Plots:
             grid_bottom = primer_bottom + y_gap
 
         if plot_genes:
-            genes_top = primer_bottom + 0.75 * y_gap
+            genes_top = current_bottom + 0.75 * y_gap
             genes_bottom = genes_top + genes_track_height
             svg_lines.extend(
                 genes_track(

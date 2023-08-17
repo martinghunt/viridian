@@ -7,6 +7,11 @@ import multiprocessing
 from operator import itemgetter
 import os
 
+import matplotlib
+import matplotlib.pyplot as plt
+import numpy as np
+import seaborn as sns
+
 from viridian import amplicon_schemes, constants, scheme_id, utils
 
 
@@ -727,6 +732,59 @@ class Plots:
         utils.write_json(os.path.join(outdir, "index.json"), file_lookup)
         logging.info("All done")
 
+    def plot_hists(
+        self,
+        set1,
+        set2,
+        outprefix,
+        x_start,
+        x_end,
+        colours,
+    ):
+        logging.info(f"Making histograms of diffs {set1} and {set2}")
+        calls1 = self.genome_calls[set1].calls
+        calls2 = self.genome_calls[set2].calls
+
+        to_call = ["ACGT_GOOD", "ACGT_DP", "N", "ACGT_BAD"]
+        # to_call = [x.name for x in Basecall]
+        w, h = matplotlib.figure.figaspect(1.1)
+        fig, axs = plt.subplots(len(to_call), 2, figsize=(w, h))
+        fig.supylabel("Density")
+        axs[0, 0].set_title("Distribution\n")
+        axs[0, 1].set_title(f"{set1} - {set2}\n")
+        plt.subplots_adjust(hspace=1, wspace=0.1)
+        for row, bc in enumerate(to_call):
+            vals1 = [calls1[i][Basecall[bc].value] for i in range(x_start, x_end + 1)]
+            vals2 = [calls2[i][Basecall[bc].value] for i in range(x_start, x_end + 1)]
+            diffs = [x - y for x, y in zip(vals1, vals2)]
+            if bc != "ACGT_BAD":
+                xmin, xmax = np.percentile(vals1 + vals2, [1, 99])
+                vals1 = [x for x in vals1 if xmin <= x <= xmax]
+                vals2 = [x for x in vals2 if xmin <= x <= xmax]
+                xmin, xmax = np.percentile(diffs, [1, 99])
+                diffs = [x for x in diffs if xmin <= x <= xmax]
+
+            sns.kdeplot(vals1, ax=axs[row, 0], fill=True, color="#40826D")
+            sns.kdeplot(vals2, ax=axs[row, 0], fill=True, color="cornflowerblue")
+            sns.kdeplot(diffs, ax=axs[row, 1], fill=True, color="black")
+            for i in [0, 1]:
+                axs[row, i].set(xlabel=None, ylabel=None, yticks=[])
+                axs[row, i].set(xlabel=None, ylabel=None, yticks=[])
+                axs[row, i].spines["top"].set_visible(False)
+                axs[row, i].spines["left"].set_visible(False)
+                axs[row, i].spines["right"].set_visible(False)
+            ax0_pos = axs[row, 0].get_position()
+            ax1_pos = axs[row, 1].get_position()
+            x_middle = 0.5 * (ax0_pos.x1 + ax1_pos.x0)
+            fig.text(x_middle, ax0_pos.y1, bc, horizontalalignment="center")
+        axs[-1, 0].set(xlabel="Number of samples")
+        axs[-1, 1].set(xlabel="Per-position difference")
+        fig.tight_layout()
+        plt.savefig(f"{outprefix}.pdf")
+        plt.savefig(f"{outprefix}.png", dpi=400)
+        plt.close()
+        plt.clf()
+
     def plot(
         self,
         outdir,
@@ -750,6 +808,7 @@ class Plots:
         diff_track=None,
         diff_track_height=20,
         datasets_to_plot=None,
+        hist_datasets=None,
     ):
         bottom_gap = 50
         if colours is None:
@@ -997,3 +1056,13 @@ class Plots:
 
         svg_export(svg_out, os.path.join(outdir, "plot.pdf"))
         svg_export(svg_out, os.path.join(outdir, "plot.png"))
+
+        if hist_datasets is not None:
+            self.plot_hists(
+                hist_datasets[0],
+                hist_datasets[1],
+                os.path.join(outdir, "hist"),
+                x_start,
+                x_end,
+                colours,
+            )

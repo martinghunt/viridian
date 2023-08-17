@@ -379,6 +379,12 @@ def main(args=None):
         metavar="DATASET",
     )
     subparser_plot.add_argument(
+        "--hist_diffs",
+        help="Plot histograms of  dataset1 - dataset2",
+        nargs=2,
+        metavar="DATASET",
+    )
+    subparser_plot.add_argument(
         "--dataset",
         help="Restrict to plotting the given dataset (can be used more than once)",
         action="append",

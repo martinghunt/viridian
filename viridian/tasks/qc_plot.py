@@ -45,4 +45,5 @@ def plot(options):
         diff_track=options.plot_diff,
         datasets_to_plot=options.dataset,
         hist_datasets=options.hist_diffs,
+        stats_tracks=options.stat,
     )

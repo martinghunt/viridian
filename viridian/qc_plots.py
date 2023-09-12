@@ -28,12 +28,12 @@ class Basecall(Enum):
 
 PLOT_DEFAULT_COLOURS = {
     "ACGT_GOOD": "#40826D",
-    "ACGT_DP": "pink",
+    "ACGT_DP": "cornflowerblue",
     "ACGT_BAD": "red",
     "INDEL": "lemonchiffon",
     "HET_GOOD": "lightgreen",
     "HET_DP": "lightblue",
-    "HET_BAD": "cornflowerblue",
+    "HET_BAD": "pink",
     "N": "lightgray",
 }
 
@@ -96,10 +96,14 @@ def svg_polygon(
     y_coords=None,
     border_width=1,
     opacity=-1,
+    polyline=False,
 ):
+    if fill_colour is None:
+        fill_color = "none"
+    element = "polyline" if polyline else "polygon"
     coord_to_join = xy_coords if xy_coords is not None else zip(x_coords, y_coords)
     l = [
-        '<polygon points="',
+        f'<{element} points="',
         " ".join([f"{x[0]},{x[1]}" for x in coord_to_join]) + '"',
         f'fill="{fill_colour}"',
     ]
@@ -203,8 +207,8 @@ def x_axis(
 def grid_v_lines(x_positions, top, bottom, x_min, x_max):
     lines = []
     step = x_positions[1] - x_positions[0]
-    opt_big = {"colour": "cornflowerblue", "stroke_width": 0.75, "dasharray": "8 2"}
-    opt_small = {"colour": "cornflowerblue", "stroke_width": 0.5, "dasharray": "5 2"}
+    opt_big = {"colour": "darkgrey", "stroke_width": 0.75, "dasharray": "8 2"}
+    opt_small = {"colour": "darkgrey", "stroke_width": 0.5, "dasharray": "5 2"}
     first_small = x_positions[0] - 0.5 * step
     if x_min <= first_small:
         lines.append(svg_line(first_small, top, first_small, bottom, **opt_small))
@@ -417,6 +421,112 @@ def genes_track(
         )
 
     return lines
+
+
+def make_windowed_track(
+    calls,
+    call_type,
+    tools,
+    genome_start,
+    genome_end,
+    x_left,
+    x_right,
+    y_top,
+    y_bottom,
+    plot_colour="black",
+    window_length=1,
+):
+    lines_out = []
+    logging.info(f"Making track(s) for {call_type.name} and tools {','.join(tools)}")
+    x_scale = (x_right - x_left) / (genome_end - genome_start)
+    x_trans = lambda x: x_left + (x - genome_start) * x_scale
+    x_vals = list(range(genome_start, genome_end + 1)) + [genome_end, genome_start]
+    x_coords = [x_trans(x) for x in x_vals]
+    max_y = 0
+    y_vals = {}
+    for tool in tools:
+        y_vals[tool] = [
+            calls[tool].calls[i][call_type.value]
+            for i in range(genome_start, genome_end + 1)
+        ]
+
+        if window_length > 1:
+            for i in range(0, len(y_vals[tool]), window_length):
+                window_max = max(y_vals[tool][i : i + window_length])
+                for j in range(i, min(i + window_length, len(y_vals[tool])), 1):
+                    y_vals[tool][j] = window_max
+        y_vals[tool] += [0, 0]
+        max_y = max(max_y, max(y_vals[tool]))
+
+    min_y = 0
+    plot_gap = 12
+    one_plot_height = (y_bottom - y_top) / len(tools)
+    current_top = y_top + plot_gap
+    current_bottom = y_top + one_plot_height
+
+    y_ax_lines = ["Number of", "samples with", call_type.name]
+    for i, l in enumerate(y_ax_lines):
+        lines_out.append(
+            svg_text(
+                20 + i * 17,
+                0.5 * (y_top + y_bottom),
+                l,
+                v_center=True,
+                h_center=True,
+                colour="black",
+                vertical=True,
+            )
+        )
+
+    top_lineopts = {"colour": "gray", "stroke_width": 0.5}  # , "dasharray": "5 2"}
+
+    for tool in tools:
+        if max_y == min_y:
+            y_scale = 0
+            y_trans = lambda y: 0.5 * (current_bottom + current_top)
+        else:
+            y_scale = (current_bottom - current_top) / (max_y - min_y)
+            y_trans = lambda y: current_bottom - (y - min_y) * y_scale
+        y_scale = (current_bottom - current_top) / (max_y - min_y)
+        y_coords = [y_trans(y) for y in y_vals[tool]]
+        lines_out.append(
+            svg_line(x_left, current_bottom, x_right, current_bottom, **top_lineopts)
+        )
+        lines_out.append(
+            svg_line(x_left, current_top, x_right, current_top, **top_lineopts)
+        )
+        lines_out.append(
+            svg_polygon(
+                "none",
+                PLOT_DEFAULT_COLOURS[call_type.name],
+                x_coords=x_coords,
+                y_coords=y_coords,
+                polyline=True,
+            )
+        )
+        lines_out.append(
+            svg_text(
+                x_right + 2,
+                0.5 * (current_top + current_bottom),
+                tool,
+                font_size=10,
+                v_center=True,
+            )
+        )
+        lines_out.append(
+            y_axis(
+                current_top,
+                current_bottom,
+                x_left,
+                ["0", str(max_y)],
+                [current_bottom, current_top],
+            )
+        )
+
+        current_top += one_plot_height
+        current_bottom += one_plot_height
+
+    return lines_out
 
 
 def make_diff_track(
@@ -809,6 +919,7 @@ class Plots:
         diff_track_height=20,
         datasets_to_plot=None,
         hist_datasets=None,
+        stats_tracks=None,
     ):
         bottom_gap = 50
         if colours is None:
@@ -823,6 +934,9 @@ class Plots:
         colours = {
             Basecall[k].name: colours.get(k, v) for k, v in PLOT_DEFAULT_COLOURS.items()
         }
+
+        if datasets_to_plot is None:
+            datasets_to_plot = list(self.genome_calls.keys())
 
         plot_rect_left_x = 120
         plot_rect_right_x = plot_width - 100
@@ -854,7 +968,7 @@ class Plots:
         ]
 
         for set_name, calls in self.genome_calls.items():
-            if datasets_to_plot is not None and set_name not in datasets_to_plot:
+            if set_name not in datasets_to_plot:
                 continue
             svg_lines.append(
                 svg_text(rect_middle, rect_y_top - 8, set_name, h_center=True)
@@ -911,6 +1025,29 @@ class Plots:
         )
 
         current_bottom = last_rect_bottom
+
+        if stats_tracks is not None:
+            for stat in stats_tracks:
+                s_track_top = current_bottom + 0.5 * y_gap
+                s_track_bottom = s_track_top + 80
+                svg_lines.extend(
+                    make_windowed_track(
+                        self.genome_calls,
+                        Basecall[stat],
+                        datasets_to_plot,
+                        x_start,
+                        x_end,
+                        plot_rect_left_x,
+                        plot_rect_right_x,
+                        s_track_top,
+                        s_track_bottom,
+                        plot_colour="black",
+                    )
+                )
+
+                current_bottom = s_track_bottom
+
+            current_bottom += 0.5 * y_gap
 
         if diff_track is not None:
             diff_track_top = current_bottom + y_gap

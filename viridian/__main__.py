@@ -390,6 +390,14 @@ def main(args=None):
         action="append",
         metavar="DATASET",
     )
+    stats = [x.name for x in viridian.qc_plots.Basecall]
+    subparser_plot.add_argument(
+        "--stat",
+        help=f"Add separate track(s) for the given stat, one for each tool (can be used more than once). Choose from: {','.join(stats)}",
+        action="append",
+        choices=stats,
+        metavar="STAT",
+    )
     subparser_plot.set_defaults(func=viridian.tasks.qc_plot.plot)
 
     args = parser.parse_args()

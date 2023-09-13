@@ -398,6 +398,13 @@ def main(args=None):
         choices=stats,
         metavar="STAT",
     )
+    subparser_plot.add_argument(
+        "--stat_bin_width",
+        help=f"Bin width for stats tracks (see --stats). Use 1 for no binning [%(default)s]",
+        type=int,
+        default=50,
+        metavar="INT",
+    )
     subparser_plot.set_defaults(func=viridian.tasks.qc_plot.plot)
 
     args = parser.parse_args()

@@ -434,7 +434,7 @@ def make_windowed_track(
     y_top,
     y_bottom,
     plot_colour="black",
-    window_length=1,
+    window_length=50,
 ):
     lines_out = []
     logging.info(f"Making track(s) for {call_type.name} and tools {','.join(tools)}")
@@ -487,8 +487,10 @@ def make_windowed_track(
         else:
             y_scale = (current_bottom - current_top) / (max_y - min_y)
             y_trans = lambda y: current_bottom - (y - min_y) * y_scale
+
         y_scale = (current_bottom - current_top) / (max_y - min_y)
         y_coords = [y_trans(y) for y in y_vals[tool]]
+
         lines_out.append(
             svg_line(x_left, current_bottom, x_right, current_bottom, **top_lineopts)
         )
@@ -496,12 +498,12 @@ def make_windowed_track(
             svg_line(x_left, current_top, x_right, current_top, **top_lineopts)
         )
         lines_out.append(
-            svg_polygon(
-                "none",
-                PLOT_DEFAULT_COLOURS[call_type.name],
-                x_coords=x_coords,
-                y_coords=y_coords,
-                polyline=True,
+            y_axis(
+                current_top,
+                current_bottom,
+                x_left,
+                ["0", str(max_y)],
+                [current_bottom, current_top],
             )
         )
         lines_out.append(
@@ -514,12 +516,13 @@ def make_windowed_track(
             )
         )
         lines_out.append(
-            y_axis(
-                current_top,
-                current_bottom,
-                x_left,
-                ["0", str(max_y)],
-                [current_bottom, current_top],
+            svg_polygon(
+                PLOT_DEFAULT_COLOURS[call_type.name],
+                PLOT_DEFAULT_COLOURS[call_type.name],
+                x_coords=x_coords,
+                y_coords=y_coords,
+                polyline=False,
+                border_width=0.4,
             )
         )
 
@@ -920,6 +923,7 @@ class Plots:
         datasets_to_plot=None,
         hist_datasets=None,
         stats_tracks=None,
+        stats_tracks_bin=50,
     ):
         bottom_gap = 50
         if colours is None:
@@ -1042,6 +1046,7 @@ class Plots:
                         s_track_top,
                         s_track_bottom,
                         plot_colour="black",
+                        window_length=stats_tracks_bin,
                     )
                 )
 

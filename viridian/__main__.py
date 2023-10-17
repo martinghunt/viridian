@@ -108,6 +108,21 @@ def main(args=None):
         default=viridian.amplicon_schemes.REF_FASTA,
     )
 
+    # --------------------------- qc_plot options ----------------------------
+    qc_plot_parser = argparse.ArgumentParser(add_help=False)
+    qc_plot_parser.add_argument(
+        "--range",
+        help="Genome range to show in plot (default is show whole genome). Using --range X Y will limit the plot to genome coords from X to Y. Coords are 1-based inclusive",
+        type=int,
+        nargs=2,
+        metavar="INT",
+    )
+    qc_plot_parser.add_argument(
+        "--gene_track",
+        help="Add track showing genes (assumes SARS-CoV-2 reference genome)",
+        action="store_true",
+    )
+
     # ------------------------ run_one_sample ----------------------------
     subparser_run_one_sample = subparsers.add_parser(
         "run_one_sample",
@@ -326,7 +341,7 @@ def main(args=None):
     # ------------------------ qc_plot plot ------------------------------
     subparser_plot = qc_plot_subparsers.add_parser(
         "plot",
-        parents=[debug_parser, common_parser],
+        parents=[debug_parser, common_parser, qc_plot_parser],
         help="Make plot from output of qc_plot gather_data/combine_data",
         usage="viridian qc_plot plot [options] <--outdir OUT>  <infile>",
         description="Make plot from output of qc_plot gather_data/combine_data",
@@ -334,13 +349,6 @@ def main(args=None):
     subparser_plot.add_argument(
         "infile",
         help="File made by qc_plots gather_data",
-    )
-    subparser_plot.add_argument(
-        "--range",
-        help="Genome range to show in plot (default is show whole genome). Using --range X Y will limit the plot to genome coords from X to Y. Coords are 1-based inclusive",
-        type=int,
-        nargs=2,
-        metavar="INT",
     )
     subparser_plot.add_argument(
         "--amp_scheme",
@@ -360,11 +368,6 @@ def main(args=None):
     subparser_plot.add_argument(
         "--add_primers",
         help="Add primers to amplicons track, only relevant if --amp_scheme used",
-        action="store_true",
-    )
-    subparser_plot.add_argument(
-        "--gene_track",
-        help="Add track showing genes (assumes SARS-CoV-2 reference genome)",
         action="store_true",
     )
     subparser_plot.add_argument(
@@ -406,6 +409,29 @@ def main(args=None):
         metavar="INT",
     )
     subparser_plot.set_defaults(func=viridian.tasks.qc_plot.plot)
+
+    # ----------------------- one_stat_plot ------------------------------
+    subparser_one_stat_plot = qc_plot_subparsers.add_parser(
+        "one_stat_plot",
+        parents=[debug_parser, common_parser, qc_plot_parser],
+        help="Make plot of one stat, multiple datasets, from runs of qc_plot gather_data",
+        usage="viridian qc_plot one_stat_plot [options] <--outdir OUT>  <infiles>",
+        description="Make plot of one stat, multiple datasets, from runs of qc_plot gather_data",
+    )
+    subparser_one_stat_plot.add_argument(
+        "tools",
+        help="/-separated list of tool name:colour",
+    )
+    subparser_one_stat_plot.add_argument(
+        "dataset_names",
+        help="/-separated list of dataset names, corresponding to input filenames",
+    )
+    subparser_one_stat_plot.add_argument(
+        "infiles",
+        nargs="+",
+        help="Files made by qc_plots gather_data",
+    )
+    subparser_one_stat_plot.set_defaults(func=viridian.tasks.qc_plot.one_stat_plot)
 
     args = parser.parse_args()
     if not hasattr(args, "func"):

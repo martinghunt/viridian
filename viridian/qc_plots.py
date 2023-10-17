@@ -1,3 +1,4 @@
+import copy
 import csv
 from enum import Enum
 import gzip
@@ -204,10 +205,10 @@ def x_axis(
     return lines
 
 
-def grid_v_lines(x_positions, top, bottom, x_min, x_max):
+def grid_v_lines(x_positions, top, bottom, x_min, x_max, plot_small=True):
     lines = []
     step = x_positions[1] - x_positions[0]
-    opt_big = {"colour": "darkgrey", "stroke_width": 0.75, "dasharray": "8 2"}
+    opt_big = {"colour": "darkgrey", "stroke_width": 0.75, "dasharray": "1 3"}
     opt_small = {"colour": "darkgrey", "stroke_width": 0.5, "dasharray": "5 2"}
     first_small = x_positions[0] - 0.5 * step
     if x_min <= first_small:
@@ -216,7 +217,7 @@ def grid_v_lines(x_positions, top, bottom, x_min, x_max):
     for i, x in enumerate(x_positions):
         lines.append(svg_line(x, top, x, bottom, **opt_big))
         small_x = x + 0.5 * step
-        if small_x <= x_max:
+        if plot_small and small_x <= x_max:
             lines.append(svg_line(small_x, top, small_x, bottom, **opt_small))
     return lines
 
@@ -435,6 +436,11 @@ def make_windowed_track(
     y_bottom,
     plot_colour="black",
     window_length=50,
+    colours=None,
+    add_tool_labels=True,
+    add_y_title=True,
+    top_y_dashed=False,
+    no_top_y=False,
 ):
     lines_out = []
     logging.info(f"Making track(s) for {call_type.name} and tools {','.join(tools)}")
@@ -464,7 +470,10 @@ def make_windowed_track(
     current_top = y_top + plot_gap
     current_bottom = y_top + one_plot_height
 
-    y_ax_lines = ["Number of", "samples with", call_type.name]
+    if add_y_title:
+        y_ax_lines = ["Number of", "samples with", call_type.name]
+    else:
+        y_ax_lines = []
     for i, l in enumerate(y_ax_lines):
         lines_out.append(
             svg_text(
@@ -478,7 +487,10 @@ def make_windowed_track(
             )
         )
 
-    top_lineopts = {"colour": "gray", "stroke_width": 0.5}  # , "dasharray": "5 2"}
+    top_lineopts = {"colour": "gray", "stroke_width": 0.5}
+    bottom_line_opts = copy.copy(top_lineopts)
+    if top_y_dashed:
+        top_lineopts["dasharray"] = "3 2"
 
     for tool in tools:
         if max_y == min_y:
@@ -492,11 +504,14 @@ def make_windowed_track(
         y_coords = [y_trans(y) for y in y_vals[tool]]
 
         lines_out.append(
-            svg_line(x_left, current_bottom, x_right, current_bottom, **top_lineopts)
+            svg_line(
+                x_left, current_bottom, x_right, current_bottom, **bottom_line_opts
+            )
         )
-        lines_out.append(
-            svg_line(x_left, current_top, x_right, current_top, **top_lineopts)
-        )
+        if not no_top_y:
+            lines_out.append(
+                svg_line(x_left, current_top, x_right, current_top, **top_lineopts)
+            )
         lines_out.append(
             y_axis(
                 current_top,
@@ -506,19 +521,21 @@ def make_windowed_track(
                 [current_bottom, current_top],
             )
         )
-        lines_out.append(
-            svg_text(
-                x_right + 2,
-                0.5 * (current_top + current_bottom),
-                tool,
-                font_size=10,
-                v_center=True,
+        if add_tool_labels:
+            lines_out.append(
+                svg_text(
+                    x_right + 2,
+                    0.5 * (current_top + current_bottom),
+                    tool,
+                    font_size=10,
+                    v_center=True,
+                )
             )
-        )
+        colour = colours.get(tool, PLOT_DEFAULT_COLOURS[call_type.name])
         lines_out.append(
             svg_polygon(
-                PLOT_DEFAULT_COLOURS[call_type.name],
-                PLOT_DEFAULT_COLOURS[call_type.name],
+                colour,
+                colour,
                 x_coords=x_coords,
                 y_coords=y_coords,
                 polyline=False,
@@ -1208,3 +1225,207 @@ class Plots:
                 x_end,
                 colours,
             )
+
+
+def one_stat_plot(
+    dataset_names,
+    pickle_files,  # dataset name -> pickle file
+    outdir,
+    tool_names,
+    tool_colours,
+    stat_to_plot="ACGT_BAD",
+    x_start=None,
+    x_end=None,
+    colours=None,  # tool -> colour
+    plot_width=1000,
+    stat_track_height=24,
+    genes_track_height=10,
+    amp_track_height=20,
+    y_gap=20,
+    x_tick_step=None,
+    y_tick_step=None,
+    amp_scheme=None,
+    plot_amp_names=False,
+    plot_amp_number=False,
+    plot_primers=True,
+    plot_genes=False,
+    title=None,
+    stats_track_bin=50,
+    tool_rename=None,
+):
+    if tool_rename is None:
+        tool_rename = {}
+    assert len(dataset_names) == len(pickle_files)
+    assert len(tool_names) == len(tool_colours)
+    tool_colours = dict(zip(tool_names, tool_colours))
+
+    calls_by_dataset = {
+        k: utils.load_pickle(v) for k, v in zip(dataset_names, pickle_files)
+    }
+    genome_lengths = set(len(x) for x in calls_by_dataset[dataset_names[0]].values())
+    assert len(genome_lengths) == 1
+    ref_length = genome_lengths.pop()
+    logging.debug(f"Ref length: {ref_length}")
+
+    if x_start is None:
+        x_start = 0
+    if x_end is None:
+        x_end = ref_length - 1
+    assert 0 <= x_start < x_end < ref_length
+    logging.info(f"Making plots for genome coords {x_start+1}-{x_end+1}")
+    track_left_x = 60
+    track_right_x = plot_width - 100
+    track_width = track_right_x - track_left_x
+    track_x_scale = track_width / (x_end - x_start)
+    track_x_middle = 0.5 * (track_left_x + track_right_x)
+    track_y_top = 10
+    grid_top = track_y_top
+
+    svg_lines = []
+
+    for dataset_name in dataset_names:
+        logging.info(f"Plotting dataset {dataset_name}")
+        pickle_data = calls_by_dataset[dataset_name]
+        # number_of_samples = sum(pickle_data[tool_names].calls[0])
+        number_of_samples = sum(pickle_data[tool_names[0]].calls[0])
+        print("Number of samples:", number_of_samples)
+        this_tool_names = [t for t in tool_names if t in pickle_data]
+        track_y_bottom = track_y_top + len(tool_names) * stat_track_height
+
+        svg_lines.extend(
+            make_windowed_track(
+                pickle_data,
+                Basecall["ACGT_BAD"],
+                this_tool_names,
+                x_start,
+                x_end,
+                track_left_x,
+                track_right_x,
+                track_y_top,
+                track_y_bottom,
+                window_length=stats_track_bin,
+                colours=tool_colours,
+                add_tool_labels=False,
+                add_y_title=False,
+                top_y_dashed=False,
+                no_top_y=True,
+            )
+        )
+        svg_lines.append(
+            svg_text(
+                track_x_middle,
+                track_y_top + 15,
+                dataset_name + f" (n={number_of_samples})",
+                colour="black",
+                h_center=True,
+                v_center=True,
+            )
+        )
+
+        track_y_top = track_y_bottom + y_gap
+        figure_bottom = track_y_top
+
+    svg_lines.append(
+        svg_text(
+            10,
+            0.5 * (grid_top + track_y_bottom),
+            "Number of samples with error",
+            vertical=True,
+            h_center=True,
+            v_center=True,
+        )
+    )
+
+    legend_middle = 0.5 * (grid_top + track_y_bottom) + 20
+    tool_height = 14
+    tool_gap = 3
+    legend_height = tool_height * len(tool_names) + tool_gap * (len(tool_names) - 1)
+    legend_top = legend_middle - 0.5 * legend_height
+    legend_x = track_right_x + 10
+    y = legend_top
+    for tool in tool_names:
+        svg_lines.append(
+            svg_line(
+                legend_x, y, legend_x + 14, y, colour=tool_colours[tool], stroke_width=4
+            )
+        )
+        svg_lines.append(
+            svg_text(legend_x + 20, y, tool_rename.get(tool, tool), v_center=True)
+        )
+        y += tool_height + tool_gap
+
+    rect_x_scale = (track_right_x - track_left_x) / (x_end - x_start)
+    x_ticks_abs = tick_positions_from_range(x_start, x_end, x_tick_step)
+    x_ticks_pos = [track_left_x + (x - x_start) * rect_x_scale for x in x_ticks_abs]
+
+    if plot_genes:
+        genes_top = track_y_top + y_gap
+        genes_bottom = genes_top + genes_track_height
+        svg_lines.extend(
+            genes_track(
+                x_start,
+                x_end,
+                track_left_x,
+                track_right_x,
+                genes_top,
+                genes_bottom,
+            )
+        )
+        svg_lines.append(
+            svg_text(
+                track_left_x - 7,
+                0.5 * (genes_top + genes_bottom),
+                "Genes",
+                colour="black",
+                h_right=True,
+                v_center=True,
+            )
+        )
+        figure_bottom = genes_bottom + 30
+        v_lines_x = [
+            x["start"]
+            for x in COVID_GENES
+            if x_start <= x["start"] <= x_end and "UTR" not in x["name"]
+        ]
+        v_lines_x = [track_left_x + (x - x_start) * rect_x_scale for x in v_lines_x]
+    else:
+        v_lines_x = x_ticks_pos
+
+    svg_lines.extend(
+        x_axis(
+            track_left_x,
+            track_right_x,
+            figure_bottom,
+            x_ticks_abs,
+            x_ticks_pos,
+        )
+    )
+    svg_lines.append(
+        svg_text(
+            track_x_middle,
+            figure_bottom + 25,
+            "Position in genome",
+            h_center=True,
+            v_center=True,
+            colour="black",
+        )
+    )
+    v_lines = grid_v_lines(
+        v_lines_x,
+        grid_top + 12,
+        figure_bottom,
+        track_left_x,
+        track_right_x,
+        plot_small=False,
+    )
+
+    os.mkdir(outdir)
+    svg_out = os.path.join(outdir, "plot.svg")
+    with open(svg_out, "w") as f:
+        print(*svg_header_lines(plot_width, figure_bottom + 60), sep="\n", file=f)
+        print(*v_lines, sep="\n", file=f)
+        print(*svg_lines, sep="\n", file=f)
+        print("</svg>", file=f)
+
+    svg_export(svg_out, os.path.join(outdir, "plot.pdf"))
+    svg_export(svg_out, os.path.join(outdir, "plot.png"))

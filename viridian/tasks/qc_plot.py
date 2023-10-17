@@ -48,3 +48,30 @@ def plot(options):
         stats_tracks=options.stat,
         stats_tracks_bin=options.stat_bin_width,
     )
+
+
+def one_stat_plot(options):
+    if options.force:
+        logging.info(f"--force option used, so deleting {options.outdir} if it exists")
+        utils.syscall(f"rm -rf {options.outdir}")
+    datasets = options.dataset_names.split("/")
+    tool_name_colours = options.tools.split("/")
+    tool_rename = {}
+    tool_names = []
+    tool_colours = []
+    for x in tool_name_colours:
+        fields = x.split(":")
+        tool_names.append(fields[0])
+        tool_colours.append(fields[1])
+        if len(fields) == 3:
+            tool_rename[fields[0]] = fields[2]
+
+    qc_plots.one_stat_plot(
+        datasets,
+        options.infiles,
+        options.outdir,
+        tool_names,
+        tool_colours,
+        plot_genes=options.gene_track,
+        tool_rename=tool_rename,
+    )

@@ -441,6 +441,7 @@ def make_windowed_track(
     add_y_title=True,
     top_y_dashed=False,
     no_top_y=False,
+    y_percent_of=None,
 ):
     lines_out = []
     logging.info(f"Making track(s) for {call_type.name} and tools {','.join(tools)}")
@@ -450,9 +451,11 @@ def make_windowed_track(
     x_coords = [x_trans(x) for x in x_vals]
     max_y = 0
     y_vals = {}
+    y_multiplier = 1 if y_percent_of is None else 100 / y_percent_of
+
     for tool in tools:
         y_vals[tool] = [
-            calls[tool].calls[i][call_type.value]
+            y_multiplier * calls[tool].calls[i][call_type.value]
             for i in range(genome_start, genome_end + 1)
         ]
 
@@ -491,6 +494,8 @@ def make_windowed_track(
     bottom_line_opts = copy.copy(top_lineopts)
     if top_y_dashed:
         top_lineopts["dasharray"] = "3 2"
+
+    max_y = int(math.floor(max_y)) + 1
 
     for tool in tools:
         if max_y == min_y:
@@ -1252,6 +1257,7 @@ def one_stat_plot(
     title=None,
     stats_track_bin=50,
     tool_rename=None,
+    bad_acgt_track_y_pc=True,
 ):
     if tool_rename is None:
         tool_rename = {}
@@ -1288,7 +1294,6 @@ def one_stat_plot(
         pickle_data = calls_by_dataset[dataset_name]
         # number_of_samples = sum(pickle_data[tool_names].calls[0])
         number_of_samples = sum(pickle_data[tool_names[0]].calls[0])
-        print("Number of samples:", number_of_samples)
         this_tool_names = [t for t in tool_names if t in pickle_data]
         track_y_bottom = track_y_top + len(tool_names) * stat_track_height
 
@@ -1309,6 +1314,7 @@ def one_stat_plot(
                 add_y_title=False,
                 top_y_dashed=False,
                 no_top_y=True,
+                y_percent_of=number_of_samples if bad_acgt_track_y_pc else None,
             )
         )
         svg_lines.append(
@@ -1325,11 +1331,12 @@ def one_stat_plot(
         track_y_top = track_y_bottom + y_gap
         figure_bottom = track_y_top
 
+    no_or_pc = "Percent" if bad_acgt_track_y_pc else "Number"
     svg_lines.append(
         svg_text(
             10,
             0.5 * (grid_top + track_y_bottom),
-            "Number of samples with error",
+            f"{no_or_pc} of samples with error",
             vertical=True,
             h_center=True,
             v_center=True,
